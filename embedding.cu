@@ -12,10 +12,10 @@ __global__ void embedding(
     const int hidden_size, 
     const int total_tokens
 ){ 
-    const int idx = blockIdx.x * blockDim.x + threadIdx.x; 
+    const int idx = blockIdx.x * blockDim.x + threadIdx.x; // each thread points to a single token 
     if(idx >= total_tokens) return; 
 
-    const int tid_y = threadIdx.y; 
+    const int tid_y = threadIdx.y; // each thread points to a single element in the hidden size 
     const int num_y = blockDim.y; 
 
     const __nv_bfloat16* src = table + ids[idx] * hidden_size; 
@@ -32,7 +32,6 @@ __global__ void embedding(
             min(bytes_per_thread , (hidden_size - i) * (int)sizeof(__nv_bfloat16)),
             block
         );
-
-
+    }
     cg::sync(block); 
 }
