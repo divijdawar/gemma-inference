@@ -54,7 +54,4 @@ class Tokenizer:
 
             encoded_input.append(ids)
 
-        return encoded_input[0] if single_input else encoded_input 
-
-
-    def decode(): pass         
+        return encoded_input[0] if single_input else encoded_input
