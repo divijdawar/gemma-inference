@@ -1,25 +1,30 @@
 #include <cuda_runtime.h>
 #include <cuda_bf16.h>
 
-template<int vec = 16> 
-__global__ void ple(
-    const __nv_bfloat16* __restrict__ ple, // [sequence_length, ple_dim]
-    __nv_bfloat16*  __restrict__ embeddings, // [batch_size, sequence_length, hidden_size]
+template<int BlockSize>
+__global__ void add_ple_broadcast(
+    const __nv_bfloat16* __restrict__ ple,
+    __nv_bfloat16*       __restrict__ embeddings,
     const int hidden_size,
     const int sequence_length,
     const int batch_size,
     const int ple_dim
-) { 
-    constexpr int tx = vec; 
-    constexpr int ty = 1; 
+) {
+    extern __shared__ __nv_bfloat16 ple_tile[];
 
-    extern __shared__ __nv_bfloat16 tile[]; 
+    const int seq_idx = blockIdx.x;
+    const int batch_idx = blockIdx.y;
+    const int thread_idx = threadIdx.x;
 
-    int idx = threadIdx.x; 
-    int seq = blockIdx.y; 
-    int tid = blockIdx.z; 
+    const __nv_bfloat16* ple_src = ple + seq_idx * ple_dim;
+    for (int i = thread_idx; i < ple_dim; i += BlockSize) {
+        ple_tile[i] = __ldg(ple_src + i);
+    }
+    __syncthreads();
 
-    for (int p = idx; p < ple_dim; p += tx){
-        tile[p] = __ldg(ple + seq*ple_dim + p);
+    __nv_bfloat16* embedding = embeddings + (batch_idx * sequence_length + seq_idx) * hidden_size;
+    for (int h = thread_idx; h < hidden_size; h += BlockSize) {
+        int ple_idx = h % ple_dim;
+        embedding[h] = __hadd(embedding[h], ple_tile[ple_idx]);
     }
 }
